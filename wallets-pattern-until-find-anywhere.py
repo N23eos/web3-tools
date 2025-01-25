@@ -3,7 +3,8 @@ import pandas as pd
 import time
 
 # Patterns for filtering
-PATTERNS = ["0", "n23eo", "000"]
+PATTERNS = ["0x00000", "0x123456", "0xABCDEF", "0xDEADBEEF", "0xBADDCAFE", "0xFEEDFACE", 
+ "0xC0FFEE", "0x8BADF00D", "0xCAFEFEED", "0xBAAAAAAD", "0xFACEB00C", "0xDEFACE", "0xC0DE", "0x00000", "0x11111", "0x22222", "0x33333", "0x44444", "0x55555",]
 # Output file name
 OUTPUT_FILE = "filtered_wallets_multiple_patterns.xlsx"
 
@@ -18,7 +19,7 @@ filtered_wallets = []
 start_time = time.time()
 
 attempt = 0  # Track the number of attempts
-while len(filtered_wallets) < 1:  # Continue until 10 wallets are found
+while len(filtered_wallets) < 5:  # Continue until 10 wallets are found
     attempt += 1
     # Generate a wallet with a mnemonic
     account = connection.eth.account.create_with_mnemonic()
