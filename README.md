@@ -1,6 +1,4 @@
-Here’s a sample **README.md** file description for your repository explaining the purpose and usage of the scripts.
 
----
 
 # Wallet Pattern Finder Scripts
 
