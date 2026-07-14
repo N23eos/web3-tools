@@ -1,0 +1,17 @@
+venv/
+.venv/
+.DS_Store
+**/.DS_Store
+
+__pycache__/
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+# Generated wallet files contain private keys — never commit
+*.xlsx
+*.csv
+*.json
+*.txt
+!requirements.txt
