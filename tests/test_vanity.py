@@ -63,3 +63,31 @@ def test_estimate_anywhere_is_easier_than_prefix():
     assert estimate_attempts("dead", Position.ANYWHERE) < estimate_attempts(
         "dead", Position.PREFIX
     )
+
+
+from web3_tools.vanity import search
+
+
+def test_search_finds_single_char_pattern_quickly():
+    # 1 hex char = 1/16 odds per attempt; finds in well under a second
+    wallets = search(
+        pattern="a",
+        position=Position.PREFIX,
+        count=2,
+        workers=2,
+    )
+    assert len(wallets) == 2
+    for wallet in wallets:
+        assert wallet.address.lower()[2:].startswith("a")
+        assert wallet.mnemonic is None
+
+
+def test_search_with_mnemonic():
+    wallets = search(
+        pattern="a",
+        position=Position.PREFIX,
+        count=1,
+        workers=1,
+        with_mnemonic=True,
+    )
+    assert wallets[0].mnemonic is not None

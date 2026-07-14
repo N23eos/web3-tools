@@ -1,5 +1,10 @@
 """Vanity address pattern matching and parallel search."""
+import multiprocessing
+import queue as queue_module
 from enum import Enum
+from typing import Callable, List, Optional
+
+from web3_tools.wallet import Wallet, generate_wallet
 
 HEX_CHARS = frozenset("0123456789abcdef")
 ADDRESS_HEX_LENGTH = 40  # address length without the 0x prefix
@@ -48,3 +53,71 @@ def estimate_attempts(pattern: str, position: Position) -> int:
         slots = ADDRESS_HEX_LENGTH - len(pattern) + 1
         return max(1, base // slots)
     return base
+
+
+PROGRESS_POLL_SECONDS = 1.0
+
+
+def _worker(
+    pattern: str,
+    position: Position,
+    with_mnemonic: bool,
+    found_queue: "multiprocessing.Queue",
+    stop_event: "multiprocessing.synchronize.Event",
+    attempts: "multiprocessing.sharedctypes.Synchronized",
+) -> None:
+    while not stop_event.is_set():
+        wallet = generate_wallet(with_mnemonic)
+        with attempts.get_lock():
+            attempts.value += 1
+        if matches(wallet.address, pattern, position):
+            found_queue.put(wallet)
+
+
+def search(
+    pattern: str,
+    position: Position,
+    count: int = 1,
+    workers: int = 1,
+    with_mnemonic: bool = False,
+    on_progress: Optional[Callable[[int, int], None]] = None,
+) -> List[Wallet]:
+    """Search for `count` wallets matching `pattern` using worker processes.
+
+    `on_progress(attempts, found)` is called roughly once per second.
+    Returns found wallets; on KeyboardInterrupt returns what was found so far.
+    """
+    found_queue: multiprocessing.Queue = multiprocessing.Queue()
+    stop_event = multiprocessing.Event()
+    attempts = multiprocessing.Value("Q", 0)
+
+    processes = [
+        multiprocessing.Process(
+            target=_worker,
+            args=(pattern, position, with_mnemonic, found_queue, stop_event, attempts),
+            daemon=True,
+        )
+        for _ in range(workers)
+    ]
+    for process in processes:
+        process.start()
+
+    found: List[Wallet] = []
+    try:
+        while len(found) < count:
+            try:
+                wallet = found_queue.get(timeout=PROGRESS_POLL_SECONDS)
+                found.append(wallet)
+            except queue_module.Empty:
+                pass
+            if on_progress is not None:
+                on_progress(attempts.value, len(found))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop_event.set()
+        for process in processes:
+            process.join(timeout=2)
+            if process.is_alive():
+                process.terminate()
+    return found
