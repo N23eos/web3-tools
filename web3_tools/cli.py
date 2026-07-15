@@ -2,6 +2,7 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 from web3_tools import __version__
@@ -24,6 +25,18 @@ def _positive_int(value: str) -> int:
     return number
 
 
+def _check_output_path(output: str) -> None:
+    """Fail fast on an unusable output path (before a long search)."""
+    if not output.endswith((".csv", ".json")):
+        raise ValueError(
+            f"Unsupported output format '{output}': use .csv or .json"
+        )
+    try:
+        Path(output).touch()
+    except OSError as exc:
+        raise ValueError(f"Cannot write to '{output}': {exc}") from exc
+
+
 def _print_wallets(wallets) -> None:
     for index, wallet in enumerate(wallets, 1):
         print(f"Wallet {index}")
@@ -33,19 +46,25 @@ def _print_wallets(wallets) -> None:
             print(f"  Mnemonic:    {wallet.mnemonic}")
 
 
-def _output_wallets(wallets, output: Optional[str]) -> None:
-    if output:
-        path = save_wallets(wallets, output)
-        print(f"Saved {len(wallets)} wallet(s) to {path}")
-        print(SECURITY_WARNING)
-    else:
+def _output_wallets(wallets, output: Optional[str]) -> int:
+    if not output:
         _print_wallets(wallets)
+        return 0
+    try:
+        path = save_wallets(wallets, output)
+    except OSError as exc:
+        print(f"Error: could not save to '{output}': {exc}", file=sys.stderr)
+        # Never lose generated keys: show them instead
+        _print_wallets(wallets)
+        return 1
+    print(f"Saved {len(wallets)} wallet(s) to {path}")
+    print(SECURITY_WARNING)
+    return 0
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
     wallets = [generate_wallet(with_mnemonic=args.mnemonic) for _ in range(args.number)]
-    _output_wallets(wallets, args.output)
-    return 0
+    return _output_wallets(wallets, args.output)
 
 
 def _cmd_vanity(args: argparse.Namespace) -> int:
@@ -53,15 +72,16 @@ def _cmd_vanity(args: argparse.Namespace) -> int:
     position = Position(args.position)
 
     # Fail on a bad output path now, not after hours of searching
-    if args.output and not args.output.endswith((".csv", ".json")):
-        raise ValueError(
-            f"Unsupported output format '{args.output}': use .csv or .json"
-        )
+    if args.output:
+        _check_output_path(args.output)
 
     expected = estimate_attempts(pattern, position)
     print(f"Pattern '{pattern}' ({position.value}): ~{expected:,} attempts per match expected")
     if expected > HARD_PATTERN_THRESHOLD and not args.yes:
-        answer = input("This may take a very long time. Continue? [y/N] ")
+        try:
+            answer = input("This may take a very long time. Continue? [y/N] ")
+        except EOFError:
+            answer = ""  # non-interactive stdin: default to No
         if answer.strip().lower() != "y":
             print("Aborted.")
             return 0
@@ -81,8 +101,7 @@ def _cmd_vanity(args: argparse.Namespace) -> int:
     if not wallets:
         print("No wallets found (interrupted).")
         return 1
-    _output_wallets(wallets, args.output)
-    return 0
+    return _output_wallets(wallets, args.output)
 
 
 def build_parser() -> argparse.ArgumentParser:

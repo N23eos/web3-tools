@@ -66,12 +66,15 @@ def _worker(
     stop_event: "multiprocessing.synchronize.Event",
     attempts: "multiprocessing.sharedctypes.Synchronized",
 ) -> None:
-    while not stop_event.is_set():
-        wallet = generate_wallet(with_mnemonic)
-        with attempts.get_lock():
-            attempts.value += 1
-        if matches(wallet.address, pattern, position):
-            found_queue.put(wallet)
+    try:
+        while not stop_event.is_set():
+            wallet = generate_wallet(with_mnemonic)
+            with attempts.get_lock():
+                attempts.value += 1
+            if matches(wallet.address, pattern, position):
+                found_queue.put(wallet)
+    except KeyboardInterrupt:
+        return  # parent handles shutdown; don't spew a traceback per worker
 
 
 def search(
@@ -109,7 +112,8 @@ def search(
                 wallet = found_queue.get(timeout=PROGRESS_POLL_SECONDS)
                 found.append(wallet)
             except queue_module.Empty:
-                pass
+                if not any(process.is_alive() for process in processes):
+                    break
             if on_progress is not None:
                 on_progress(attempts.value, len(found))
     except KeyboardInterrupt:

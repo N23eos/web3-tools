@@ -64,3 +64,35 @@ def test_vanity_hard_pattern_requires_confirmation(monkeypatch, capsys):
     exit_code = main(["vanity", "aaaaaaaa", "--count", "1"])
     assert exit_code == 0
     assert "Aborted" in capsys.readouterr().out
+
+
+def test_vanity_unwritable_output_dir_fails_before_search(capsys):
+    exit_code = main(
+        ["vanity", "a", "-o", "/nonexistent_dir_xyz/out.csv", "--yes"]
+    )
+    assert exit_code == 1
+    assert "Cannot write" in capsys.readouterr().err
+
+
+def test_generate_prints_wallets_when_save_fails(tmp_path, monkeypatch, capsys):
+    import web3_tools.cli as cli
+
+    def fail_save(wallets, path):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(cli, "save_wallets", fail_save)
+    exit_code = main(["generate", "-n", "1", "-o", str(tmp_path / "w.csv")])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "disk full" in captured.err
+    assert "0x" in captured.out  # keys printed, not lost
+
+
+def test_vanity_confirmation_eof_aborts(monkeypatch, capsys):
+    def raise_eof(prompt):
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", raise_eof)
+    exit_code = main(["vanity", "aaaaaaaa", "--count", "1"])
+    assert exit_code == 0
+    assert "Aborted" in capsys.readouterr().out
