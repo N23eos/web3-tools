@@ -91,3 +91,7 @@ def test_search_with_mnemonic():
         with_mnemonic=True,
     )
     assert wallets[0].mnemonic is not None
+
+
+def test_matches_accepts_unnormalized_pattern():
+    assert matches(ADDR, "0xDEAD", Position.PREFIX)

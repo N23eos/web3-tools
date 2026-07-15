@@ -8,6 +8,7 @@ from typing import Iterable, Union
 from web3_tools.wallet import Wallet
 
 FIELDS = ("address", "private_key", "mnemonic")
+SUPPORTED_EXTENSIONS = (".csv", ".json")
 
 
 def save_wallets(wallets: Iterable[Wallet], path: Union[str, Path]) -> Path:
@@ -23,6 +24,7 @@ def save_wallets(wallets: Iterable[Wallet], path: Union[str, Path]) -> Path:
         path.write_text(json.dumps(rows, indent=2))
     else:
         raise ValueError(
-            f"Unsupported output format '{path.suffix}': use .csv or .json"
+            f"Unsupported output format '{path.suffix}': "
+            f"use {' or '.join(SUPPORTED_EXTENSIONS)}"
         )
     return path

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from web3_tools import __version__
-from web3_tools.output import save_wallets
+from web3_tools.output import SUPPORTED_EXTENSIONS, save_wallets
 from web3_tools.vanity import Position, estimate_attempts, normalize_pattern, search
 from web3_tools.wallet import generate_wallet
 
@@ -25,16 +25,24 @@ def _positive_int(value: str) -> int:
     return number
 
 
-def _check_output_path(output: str) -> None:
-    """Fail fast on an unusable output path (before a long search)."""
-    if not output.endswith((".csv", ".json")):
+def _check_output_path(output: str) -> bool:
+    """Fail fast on an unusable output path (before a long search).
+
+    Returns True if the pre-flight check created the file, so the caller
+    can remove the empty placeholder when nothing gets written.
+    """
+    if not output.endswith(SUPPORTED_EXTENSIONS):
         raise ValueError(
-            f"Unsupported output format '{output}': use .csv or .json"
+            f"Unsupported output format '{output}': "
+            f"use {' or '.join(SUPPORTED_EXTENSIONS)}"
         )
+    path = Path(output)
+    existed = path.exists()
     try:
-        Path(output).touch()
+        path.touch()
     except OSError as exc:
         raise ValueError(f"Cannot write to '{output}': {exc}") from exc
+    return not existed
 
 
 def _print_wallets(wallets) -> None:
@@ -63,6 +71,8 @@ def _output_wallets(wallets, output: Optional[str]) -> int:
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
+    if args.output:
+        _check_output_path(args.output)
     wallets = [generate_wallet(with_mnemonic=args.mnemonic) for _ in range(args.number)]
     return _output_wallets(wallets, args.output)
 
@@ -72,8 +82,9 @@ def _cmd_vanity(args: argparse.Namespace) -> int:
     position = Position(args.position)
 
     # Fail on a bad output path now, not after hours of searching
+    created_placeholder = False
     if args.output:
-        _check_output_path(args.output)
+        created_placeholder = _check_output_path(args.output)
 
     expected = estimate_attempts(pattern, position)
     print(f"Pattern '{pattern}' ({position.value}): ~{expected:,} attempts per match expected")
@@ -99,6 +110,8 @@ def _cmd_vanity(args: argparse.Namespace) -> int:
     )
     print()
     if not wallets:
+        if created_placeholder:
+            Path(args.output).unlink(missing_ok=True)
         print("No wallets found (interrupted).")
         return 1
     return _output_wallets(wallets, args.output)

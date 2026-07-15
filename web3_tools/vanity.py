@@ -37,7 +37,14 @@ def normalize_pattern(pattern: str) -> str:
 
 
 def matches(address: str, pattern: str, position: Position) -> bool:
-    """Case-insensitive match of a normalized pattern against an address."""
+    """Case-insensitive match of a pattern against an address.
+
+    Accepts raw patterns like "0xDEAD"; hot-path callers should still run
+    the pattern through normalize_pattern() once for validation.
+    """
+    pattern = pattern.lower()
+    if pattern.startswith("0x"):
+        pattern = pattern[2:]
     body = address.lower()[2:]  # strip 0x
     if position is Position.PREFIX:
         return body.startswith(pattern)
@@ -115,7 +122,9 @@ def search(
                 if not any(process.is_alive() for process in processes):
                     break
             if on_progress is not None:
-                on_progress(attempts.value, len(found))
+                with attempts.get_lock():
+                    current_attempts = attempts.value
+                on_progress(current_attempts, len(found))
     except KeyboardInterrupt:
         pass
     finally:

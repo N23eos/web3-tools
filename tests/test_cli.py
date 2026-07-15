@@ -96,3 +96,30 @@ def test_vanity_confirmation_eof_aborts(monkeypatch, capsys):
     exit_code = main(["vanity", "aaaaaaaa", "--count", "1"])
     assert exit_code == 0
     assert "Aborted" in capsys.readouterr().out
+
+
+def test_vanity_removes_precreated_file_when_nothing_found(tmp_path, monkeypatch):
+    import web3_tools.cli as cli
+
+    out = tmp_path / "found.csv"
+    monkeypatch.setattr(cli, "search", lambda **kwargs: [])
+    exit_code = main(["vanity", "a", "-o", str(out), "--yes"])
+    assert exit_code == 1
+    assert not out.exists()  # pre-flight placeholder cleaned up
+
+
+def test_vanity_keeps_existing_file_when_nothing_found(tmp_path, monkeypatch):
+    import web3_tools.cli as cli
+
+    out = tmp_path / "found.csv"
+    out.write_text("existing data")
+    monkeypatch.setattr(cli, "search", lambda **kwargs: [])
+    exit_code = main(["vanity", "a", "-o", str(out), "--yes"])
+    assert exit_code == 1
+    assert out.read_text() == "existing data"
+
+
+def test_generate_unwritable_output_dir_fails_fast(capsys):
+    exit_code = main(["generate", "-n", "1", "-o", "/nonexistent_dir_xyz/w.csv"])
+    assert exit_code == 1
+    assert "Cannot write" in capsys.readouterr().err
