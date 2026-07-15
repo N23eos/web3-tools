@@ -1,16 +1,20 @@
 """web3-tools command line interface."""
 import argparse
+import os
 import sys
 from typing import List, Optional
 
 from web3_tools import __version__
 from web3_tools.output import save_wallets
+from web3_tools.vanity import Position, estimate_attempts, normalize_pattern, search
 from web3_tools.wallet import generate_wallet
 
 SECURITY_WARNING = (
     "WARNING: this file contains private keys and seed phrases in plaintext.\n"
     "Anyone with this file controls the wallets. Store it accordingly."
 )
+
+HARD_PATTERN_THRESHOLD = 16 ** 7  # ~268M expected attempts: hours of CPU time
 
 
 def _positive_int(value: str) -> int:
@@ -44,6 +48,43 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_vanity(args: argparse.Namespace) -> int:
+    pattern = normalize_pattern(args.pattern)
+    position = Position(args.position)
+
+    # Fail on a bad output path now, not after hours of searching
+    if args.output and not args.output.endswith((".csv", ".json")):
+        raise ValueError(
+            f"Unsupported output format '{args.output}': use .csv or .json"
+        )
+
+    expected = estimate_attempts(pattern, position)
+    print(f"Pattern '{pattern}' ({position.value}): ~{expected:,} attempts per match expected")
+    if expected > HARD_PATTERN_THRESHOLD and not args.yes:
+        answer = input("This may take a very long time. Continue? [y/N] ")
+        if answer.strip().lower() != "y":
+            print("Aborted.")
+            return 0
+
+    def report_progress(attempts: int, found: int) -> None:
+        print(f"\rAttempts: {attempts:,}  Found: {found}/{args.count}", end="", flush=True)
+
+    wallets = search(
+        pattern=pattern,
+        position=position,
+        count=args.count,
+        workers=args.workers,
+        with_mnemonic=args.mnemonic,
+        on_progress=report_progress,
+    )
+    print()
+    if not wallets:
+        print("No wallets found (interrupted).")
+        return 1
+    _output_wallets(wallets, args.output)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="web3-tools",
@@ -62,6 +103,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate.add_argument("-o", "--output", help="output file (.csv or .json)")
     generate.set_defaults(func=_cmd_generate)
+
+    vanity = subparsers.add_parser("vanity", help="find addresses matching a pattern")
+    vanity.add_argument("pattern", help="hex pattern, e.g. dead or 0xCAFE")
+    vanity.add_argument(
+        "--position",
+        choices=[p.value for p in Position],
+        default=Position.PREFIX.value,
+        help="where the pattern must appear (default: prefix)",
+    )
+    vanity.add_argument("--count", type=_positive_int, default=1)
+    vanity.add_argument(
+        "--workers", type=_positive_int, default=os.cpu_count() or 1,
+        help="parallel processes (default: CPU count)",
+    )
+    vanity.add_argument(
+        "--mnemonic", action="store_true",
+        help="generate wallets with seed phrases (slower search)",
+    )
+    vanity.add_argument("--yes", action="store_true", help="skip difficulty confirmation")
+    vanity.add_argument("-o", "--output", help="output file (.csv or .json)")
+    vanity.set_defaults(func=_cmd_vanity)
 
     return parser
 
