@@ -2,6 +2,9 @@
 
 # web3-tools
 
+[![tests](https://github.com/N23eos/web3-tools/actions/workflows/tests.yml/badge.svg)](https://github.com/N23eos/web3-tools/actions/workflows/tests.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+
 Generate EVM wallets and find vanity addresses — addresses that start with,
 end with, or contain a hex pattern you choose. One address works across all
 EVM chains (Ethereum, Base, Arbitrum, BSC, Polygon, ...).

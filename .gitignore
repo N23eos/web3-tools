@@ -15,3 +15,9 @@ build/
 *.json
 *.txt
 !requirements.txt
+
+# Local planning artifacts
+.plan.md
+docs/superpowers/
+.coverage
+.claude/
